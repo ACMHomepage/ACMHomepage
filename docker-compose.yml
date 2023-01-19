@@ -1,0 +1,35 @@
+version: '3.9'
+services:
+  backend_postgres:
+    image: postgres:15.1
+    restart: always
+    environment:
+      - "POSTGRES_PASSWORD=password"
+      - "POSTGRES_DB=backend"
+    volumes:
+      - ./data/postgres/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
+      timeout: 3s
+      retries: 5
+  backend:
+    build: ./backend
+    environment:
+      - "POSTGRES_URL=postgres://postgres:password@backend_postgres:5432/backend?sslmode=disable"
+    depends_on:
+      backend_postgres:
+        condition: service_healthy
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+  caddy:
+    image: caddy:2.6
+    volumes:
+      - ./data/caddy/data:/data
+      - ./data/caddy/Caddyfile:/etc/caddy/Caddyfile
+    ports:
+      - 80:80
+    depends_on:
+      - backend
+      - frontend
