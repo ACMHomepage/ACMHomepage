@@ -4,12 +4,13 @@ services:
     image: postgres:15.1
     restart: always
     environment:
+      - "PGUSER=postgres"
       - "POSTGRES_PASSWORD=password"
       - "POSTGRES_DB=backend"
     volumes:
       - ./data/postgres/data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready", "-d", "db_prod"]
+      test: [ "CMD-SHELL", "pg_isready", "-d", "db_prod" ]
       timeout: 3s
       retries: 5
   backend:
