@@ -2,7 +2,7 @@ FROM golang:1.19
 
 WORKDIR /usr/src/app
 
-ENV GOPROXY https://goproxy.cn
+ARG GOPROXY
 
 # Download the modules.
 COPY go.mod go.sum ./
