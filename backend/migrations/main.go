@@ -6,4 +6,3 @@ import (
 
 // A collection of migrations.
 var Migrations = migrate.NewMigrations()
-

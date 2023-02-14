@@ -10,19 +10,21 @@
     + 在自己/团队的 submission 中检索: submit_time 区间 | user 列表
 
 ## 数据库表设计
-| 表名        	| 字段         	|              	|              	|             	|                	|      	|
-|-------------	|--------------	|--------------	|--------------	|-------------	|----------------	|------	|
-| user        	| oj_id        	| handle       	| accept_count 	| max_rating  	| current_rating 	| link 	|
-| problem     	| oj_id        	| problem_name 	| rating       	| link        	|                	|      	|
-| submission  	| user_id      	| problem_id   	| verdict_id   	| submit_time 	|                	|      	|
-| problem_tag 	| problem_id   	| tag_id       	|              	|             	|                	|      	|
-| oj          	| oj_name      	|              	|              	|             	|                	|      	|
-| tag         	| tag_name     	|              	|              	|             	|                	|      	|
-| verdict     	| verdict_name 	|              	|              	|             	|                	|      	|
+| 表名        	| 字段 	|              	|              	|              	|             	|                	|      	|
+|-------------	|------	|--------------	|--------------	|--------------	|-------------	|----------------	|------	|
+| oj_user     	| id   	| oj_id        	| handle       	| accept_count 	| max_rating  	| current_rating 	| link 	|
+| problem     	| id   	| oj_id        	| problem_name 	| rating       	| link        	|                	|      	|
+| submission  	| id   	| oj_user_id   	| problem_id   	| verdict_id   	| submit_time 	| link           	|      	|
+| problem_tag 	| id   	| problem_id   	| tag_id       	|              	|             	|                	|      	|
+| oj          	| id   	| oj_name      	|              	|              	|             	|                	|      	|
+| tag         	| id   	| tag_name     	|              	|              	|             	|                	|      	|
+| verdict     	| id   	| verdict_name 	|              	|              	|             	|                	|      	|
 
 ### 字段名解释
 + xxx_id: 指向 xxx 表的外键
 + link: 指向原 oj 平台的 url
++ verdict: 评测结果(如 AC, WA, TLE 等)
++ handle: 用户名
 
 ## Resource
 ### cftracker:
@@ -30,3 +32,6 @@
 
 ### cf_api:
 <https://codeforces.com/apiHelp>
++ user.status: submission
++ user.info: rating
++ problemset.problems
