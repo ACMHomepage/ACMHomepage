@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 
@@ -83,43 +82,11 @@ func run(ctx context.Context) error {
 
 	// Start the HTTP server.
 	r := gin.Default()
-	r.GET("/api/v1/hello", func(ctx *gin.Context) {
-		hello := new(storage.Hello)
-		db.GetHello(ctx, hello)
+	registerAPI(r, db)
+	return nil
+}
 
-		ctx.JSON(http.StatusOK, gin.H{
-			"hello": hello.Data,
-		})
-	})
-	r.PUT("/api/v1/hello", func(ctx *gin.Context) {
-		// Get the body of request.
-		buf, err := io.ReadAll(ctx.Request.Body)
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"message": err.Error(),
-			})
-			return
-		}
-
-		// Update the data in database.
-		err = db.SetHello(ctx, &storage.Hello{
-			ID:   1,
-			Data: string(buf),
-		})
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"message": err.Error(),
-			})
-			return
-		}
-
-		// Return response.
-		ctx.JSON(http.StatusOK, gin.H{
-			"hello": string(buf),
-		})
-	})
-
-	// test for news
+func registerAPI(r *gin.Engine, db storage.DB) {
 	r.GET("/api/v1/news", func(ctx *gin.Context) {
 		var newsList []storage.News
 		err := db.ListNews(ctx, &newsList)
@@ -134,6 +101,4 @@ func run(ctx context.Context) error {
 		})
 	})
 	r.Run()
-
-	return nil
 }
