@@ -133,20 +133,6 @@ func run(ctx context.Context) error {
 			"data": newsList,
 		})
 	})
-	// r.GET("/api/v1/news/:id", func(ctx *gin.Context) {
-	// 	id, _ := ctx.Params.Get("id")
-	// 	news := new(storage.News)
-	// 	err := db.GetNews(ctx, news, id)
-	// 	if err != nil {
-	// 		ctx.JSON(http.StatusInternalServerError, gin.H{
-	// 			"message": err.Error(),
-	// 		})
-	// 		return
-	// 	}
-	// 	ctx.JSON(http.StatusOK, gin.H{
-	// 		"data": news,
-	// 	})
-	// })
 	r.Run()
 
 	return nil
