@@ -8,10 +8,15 @@ import (
 	"github.com/skogkatt-org/ACMHomepage/backend/storage"
 )
 
+// func UpdateUser(db storage.DB, ctx context.Context, handle string) {
+// 	ret := db.GetOjUserByHandle(ctx, handle)
+// 	for _, ojUser := range ret {
+// 		UpdateOjUser(db, ctx, ojUser)
+// 	}
+// }
+
 func UpdateOjUser(db storage.DB, ctx context.Context, ojUser *storage.OjUser) {
-	oj := new(storage.Oj)
-	db.GetOjByID(ctx, oj)
-	if oj.OjName == "codeforces" {
+	if ojUser.OjName == "codeforces" {
 		// 获取rating
 		res := apiPost("https://codeforces.com/api/user.info", url.Values{"handles": {ojUser.Handle}})
 		if res["status"] == "OK" {
@@ -20,51 +25,91 @@ func UpdateOjUser(db storage.DB, ctx context.Context, ojUser *storage.OjUser) {
 			ojUser.MaxRating = int64(info["maxRating"].(float64))
 		}
 
-		// 更新submission
-		UpdateCfSubmission(db, ctx, ojUser.ID, ojUser.Handle)
+		// 更新用户的submission
+		UpdateCfSubmission(db, ctx, ojUser)
 
 		// 获取AcceptCount
-		db.GetAcceptCount(ctx, ojUser)
+		ojUser.AcceptCount, _ = db.GetAcceptCount(ctx, ojUser.ID)
 
 		ojUser.Link = "https://codeforces.com/profile/" + ojUser.Handle
 
-		db.SetOjUser(ctx, ojUser)
+		// 更新OjUser数据
+		db.UpdateOjUser(ctx, ojUser)
 	}
 }
 
-func UpdateCfSubmission(db storage.DB, ctx context.Context, ojUserID int64, handle string) {
-	res := apiPost("https://codeforces.com/api/user.status", url.Values{"handle": {handle}})
+func UpdateCfSubmission(db storage.DB, ctx context.Context, ojUser *storage.OjUser) {
+	res := apiPost("https://codeforces.com/api/user.status", url.Values{"handle": {ojUser.Handle}})
 	if res["status"] == "OK" {
-		result := res["result"].([]map[string]interface{})
-		for _, info := range result {
-			submission := new(storage.Submission)
-			submission.OjUserID = ojUserID
-
+		result := res["result"].([]interface{})
+		for _, _info := range result {
+			info := _info.(map[string]interface{})
 			problemInfo := info["problem"].(map[string]interface{})
-			contestId := problemInfo["contestId"].(int64)
-			contestIndex := problemInfo["index"].(string)
-
-			// 通过link查询ProblemID，没有则加入数据库
-			problem := new(storage.Problem)
-			problem.Link = "https://codeforces.com/contest/" + strconv.FormatInt(contestId, 10) + "/problem/" + contestIndex
-			exists, _ := db.GetProblemByLink(ctx, problem)
-			if !exists {
-				problem.Rating = int64(problemInfo["points"].(float64))
-				problem.ProblemName = problemInfo["name"].(string)
-				// TODO
-				// 处理tag problem_tag
+			if problemInfo["contestId"] == nil {
+				// TODO: 特殊数据，先跳过
+				// problemsetName: acmsguru
+				// 链接形式和常规problemset中的不同，后续单独处理
+				// fmt.Println(problemInfo)
+				continue
 			}
-			submission.ProblemID = problem.ID
+			contestId := problemInfo["contestId"].(float64)
+			submissionId := info["id"].(float64)
+			submissionLink := "https://codeforces.com/contest/" + strconv.FormatFloat(contestId, 'f', 0, 64) + "/submission/" + strconv.FormatFloat(submissionId, 'f', 0, 64)
+			var submission storage.Submission
+			if err := db.GetSubmissionByLink(ctx, &submission, submissionLink); err != nil {
+				submission.OjUserID = ojUser.ID
+				submission.Link = submissionLink
+				contestIndex := problemInfo["index"].(string)
+				problemLink := "https://codeforces.com/contest/" + strconv.FormatFloat(contestId, 'f', 0, 64) + "/problem/" + contestIndex
+				var problem storage.Problem
+				if err := db.GetProblemByLink(ctx, &problem, problemLink); err != nil {
+					problem.OjName = ojUser.OjName
+					problem.Name = problemInfo["name"].(string)
+					problem.Link = problemLink
+					if problemInfo["points"] != nil {
+						problem.Rating = int64(problemInfo["points"].(float64))
+					}
+					if err := db.CreateProblem(ctx, &problem); err != nil {
+						panic(err)
+					}
+					tags := problemInfo["tags"].([]interface{})
+					for _, _tagName := range tags {
+						tagName := _tagName.(string)
+						var tag storage.Tag
+						if err := db.GetTag(ctx, &tag, tagName); err != nil {
+							tag.Name = tagName
+							if err := db.CreateTag(ctx, &tag); err != nil {
+								panic(err)
+							}
+						}
+						var problemToTag storage.ProblemToTag
+						if err := db.GetProblemToTag(ctx, &problemToTag, problem.ID, tag.Name); err != nil {
+							problemToTag.ProblemID = problem.ID
+							problemToTag.TagName = tag.Name
+							if err := db.CreateProblemToTag(ctx, &problemToTag); err != nil {
+								panic(err)
+							}
+						}
+					}
+				}
+				submission.ProblemID = problem.ID
+				verdictName := info["verdict"].(string)
+				var verdict storage.Verdict
+				if err := db.GetVerdict(ctx, &verdict, verdictName); err != nil {
+					verdict.Name = verdictName
+					if err := db.CreateVerdict(ctx, &verdict); err != nil {
+						panic(err)
+					}
+				}
+				submission.VerdictName = verdict.Name
+				submission.SubmitTime = info["creationTimeSeconds"].(float64)
 
-			verdict := new(storage.Verdict)
-			verdict.VerdictName = info["verdict"].(string)
-			db.GetVerdictID(ctx, verdict)
-			submission.VerdictID = verdict.ID
-
-			submission.SubmitTime = info["creationTimeSeconds"].(int64) // unix-format time
-
-			submissionId := info["id"].(int64)
-			submission.Link = "https://codeforces.com/contest/" + strconv.FormatInt(contestId, 10) + "/submission/" + strconv.FormatInt(submissionId, 10)
+				if err := db.CreateSubmission(ctx, &submission); err != nil {
+					panic(err)
+				}
+			} else {
+				break
+			}
 		}
 	}
 }

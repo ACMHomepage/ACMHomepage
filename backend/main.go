@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 
@@ -77,6 +76,11 @@ func run(ctx context.Context) error {
 	// Connect and init the database.
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(config.PostgresURL)))
 	db := storage.DB{DB: bun.NewDB(sqldb, pgdialect.New())}
+
+	// Register many to many model so bun can better recognize m2m relation.
+	// This should be done before you use the model for the first time.
+	db.RegisterModel((*storage.ProblemToTag)(nil))
+
 	err = migrateDB(ctx, db)
 	if err != nil {
 		return err
@@ -84,82 +88,83 @@ func run(ctx context.Context) error {
 
 	// Start the HTTP server.
 	r := gin.Default()
-	r.GET("/api/v1/hello", func(ctx *gin.Context) {
-		hello := new(storage.Hello)
-		db.GetHello(ctx, hello)
 
-		ctx.JSON(http.StatusOK, gin.H{
-			"hello": hello.Data,
-		})
-	})
-	r.PUT("/api/v1/hello", func(ctx *gin.Context) {
-		// Get the body of request.
-		buf, err := io.ReadAll(ctx.Request.Body)
-		if err != nil {
+	// 获取用户统计数据
+	r.GET("/api/v1/oj_user/:oj/:handle", func(ctx *gin.Context) {
+		ojName, _ := ctx.Params.Get("oj")
+		handle, _ := ctx.Params.Get("handle")
+
+		var oj storage.Oj
+		if err := db.GetOj(ctx, &oj, ojName); err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"message": err.Error(),
 			})
 			return
 		}
 
-		// Update the data in database.
-		err = db.SetHello(ctx, &storage.Hello{
-			ID:   1,
-			Data: string(buf),
+		var ojUser storage.OjUser
+		if err := db.GetOjUser(ctx, &ojUser, ojName, handle); err != nil {
+			ojUser.OjName = ojName
+			ojUser.Handle = handle
+			if err := db.CreateOjUser(ctx, &ojUser); err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
+		}
+
+		// 使用爬虫更新用户数据
+		crawler.UpdateOjUser(db, ctx, &ojUser)
+
+		ctx.JSON(http.StatusOK, gin.H{
+			"user": ojUser,
 		})
-		if err != nil {
+	})
+
+	// 获取用户提交记录
+	r.GET("/api/v1/submission/:oj/:handle", func(ctx *gin.Context) {
+		ojName, _ := ctx.Params.Get("oj")
+		handle, _ := ctx.Params.Get("handle")
+
+		var oj storage.Oj
+		if err := db.GetOj(ctx, &oj, ojName); err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"message": err.Error(),
 			})
 			return
 		}
 
-		// Return response.
+		var ojUser storage.OjUser
+		if err := db.GetOjUser(ctx, &ojUser, ojName, handle); err != nil {
+			ojUser.OjName = ojName
+			ojUser.Handle = handle
+			if err := db.CreateOjUser(ctx, &ojUser); err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
+		}
+
+		crawler.UpdateOjUser(db, ctx, &ojUser)
+
+		if err := db.GetSubmissionList(ctx, &ojUser, ojName, handle); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
+
 		ctx.JSON(http.StatusOK, gin.H{
-			"hello": string(buf),
+			"submission": ojUser.SubmissionList,
 		})
 	})
 
-	r.GET("/api/v1/oj_user", func(ctx *gin.Context) {
-		// example: /api/v1/oj_user?oj=codeforces&handle=jiangly
-		ojName := ctx.DefaultQuery("oj", "codeforces")
-		handle := ctx.DefaultQuery("handle", "jiangly")
-
-		oj := new(storage.Oj)
-		oj.OjName = ojName
-		db.GetOj(ctx, oj)
-
-		ojUser := new(storage.OjUser)
-		ojUser.OjID = oj.ID
-		ojUser.Handle = handle
-		crawler.UpdateOjUser(db, ctx, ojUser)
-		ctx.JSON(http.StatusOK, gin.H{
-			"handle":         ojUser.Handle,
-			"current_rating": ojUser.CurrentRating,
-			"max_rating":     ojUser.MaxRating,
-			"accept_count":   ojUser.AcceptCount,
-		})
-	})
-
-	// TODO
-	// 检索器
+	// TODO: 检索器
 	// r.GET("/api/v1/problems", func(ctx *gin.Context) {
-	// 	// /api/v1/problems?rating=1800-2300&tags=dp,math
-	// 	// rating := range
-	// 	// tags := slice
+	// 	// api/v1/problems?rating=1800-2300&tags=dp,math
 	// 	// NOTE: 每天更新一次 UpdateProblem()
-	// 	// db.GetProblem() // storage/storage.go
-	// 	// return json
-	// })
-
-	// 提交记录
-	// r.GET("/api/v1/submission", func(ctx *gin.Context) {
-	// 	// /api/v1/submission?handle=flowrays&submit_time=20230206000000-20230207000000
-	// 	// handle := xxx
-	// 	// submit_time := range
-	// 	// UpdateOjUser(oj, handle, db)
-	// 	// db.GetOjuser()
-	// 	// return json
 	// })
 
 	r.Run()
