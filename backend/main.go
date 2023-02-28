@@ -76,14 +76,15 @@ func run(ctx context.Context) error {
 	// Connect and init the database.
 	sqldb := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(config.PostgresURL)))
 	db := storage.DB{DB: bun.NewDB(sqldb, pgdialect.New())}
-	err = migrateDB(ctx, db)
-	if err != nil {
-		return err
-	}
 
 	// Register many to many model so bun can better recognize m2m relation.
 	// This should be done before you use the model for the first time.
 	db.RegisterModel((*storage.NewsToTag)(nil))
+
+	err = migrateDB(ctx, db)
+	if err != nil {
+		return err
+	}
 
 	// Start the HTTP server.
 	r := gin.Default()
