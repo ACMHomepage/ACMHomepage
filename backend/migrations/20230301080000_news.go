@@ -10,37 +10,28 @@ import (
 
 func init() {
 	news := new(storage.News)
+	tag := new(storage.Tag)
+	newsToTag := new(storage.NewsToTag)
 
 	up := func(ctx context.Context, db *bun.DB) error {
 		_, err := db.NewCreateTable().Model(news).Exec(ctx)
 		if err != nil {
 			return err
 		}
-
-		_, err = db.NewInsert().Model(&storage.News{
-			ID:      1,
-			Title:   "test1",
-			Image:   "test-image1",
-			Content: "test-content1",
-		}).Exec(ctx)
+		_, err = db.NewCreateTable().Model(tag).Exec(ctx)
 		if err != nil {
 			return err
 		}
-
-		_, err = db.NewInsert().Model(&storage.News{
-			ID:      2,
-			Title:   "test2",
-			Image:   "test-image2",
-			Content: "test-content2",
-		}).Exec(ctx)
+		_, err = db.NewCreateTable().Model(newsToTag).Exec(ctx)
 		if err != nil {
-			return err
+			return nil
 		}
-
 		return nil
 	}
 	down := func(ctx context.Context, db *bun.DB) error {
 		db.NewDropTable().Model(news).Exec(ctx)
+		db.NewDropTable().Model(tag).Exec(ctx)
+		db.NewDropTable().Model(newsToTag).Exec(ctx)
 		return nil
 	}
 
