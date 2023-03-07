@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/uptrace/bun"
@@ -88,8 +89,12 @@ func run(ctx context.Context) error {
 
 	// Start the HTTP server.
 	r := gin.Default()
+	registerAPI(r, db)
+	return nil
+}
 
-	// 获取用户统计数据
+func registerAPI(r *gin.Engine, db storage.DB) {
+	// Get user statistical data.
 	r.GET("/api/v1/oj_user/:oj/:handle", func(ctx *gin.Context) {
 		ojName, _ := ctx.Params.Get("oj")
 		handle, _ := ctx.Params.Get("handle")
@@ -114,7 +119,7 @@ func run(ctx context.Context) error {
 			}
 		}
 
-		// 使用爬虫更新用户数据
+		// Use crawler to update user data.
 		crawler.UpdateOjUser(db, ctx, &ojUser)
 
 		ctx.JSON(http.StatusOK, gin.H{
@@ -122,8 +127,8 @@ func run(ctx context.Context) error {
 		})
 	})
 
-	// 获取用户提交记录
-	r.GET("/api/v1/submission/:oj/:handle", func(ctx *gin.Context) {
+	// Get user submissions.
+	r.GET("/api/v1/submissions/:oj/:handle", func(ctx *gin.Context) {
 		ojName, _ := ctx.Params.Get("oj")
 		handle, _ := ctx.Params.Get("handle")
 
@@ -161,13 +166,22 @@ func run(ctx context.Context) error {
 		})
 	})
 
-	// TODO: 检索器
-	// r.GET("/api/v1/problems", func(ctx *gin.Context) {
-	// 	// api/v1/problems?rating=1800-2300&tags=dp,math
-	// 	// NOTE: 每天更新一次 UpdateProblem()
-	// })
+	// Search problems with rating range.
+	r.GET("/api/v1/problems", func(ctx *gin.Context) {
+		rating_from, err := strconv.ParseInt(ctx.DefaultQuery("rating_from", "800"), 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		rating_to, err := strconv.ParseInt(ctx.DefaultQuery("rating_to", "3500"), 10, 64)
+		if err != nil {
+			panic(err)
+		}
+		problems := make([]storage.Problem, 0)
+		db.GetProblemByRating(ctx, &problems, rating_from, rating_to)
+		ctx.JSON(http.StatusOK, gin.H{
+			"problems": problems,
+		})
+	})
 
 	r.Run()
-
-	return nil
 }

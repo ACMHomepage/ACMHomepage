@@ -8,16 +8,8 @@ import (
 	"github.com/skogkatt-org/ACMHomepage/backend/storage"
 )
 
-// func UpdateUser(db storage.DB, ctx context.Context, handle string) {
-// 	ret := db.GetOjUserByHandle(ctx, handle)
-// 	for _, ojUser := range ret {
-// 		UpdateOjUser(db, ctx, ojUser)
-// 	}
-// }
-
 func UpdateOjUser(db storage.DB, ctx context.Context, ojUser *storage.OjUser) {
 	if ojUser.OjName == "codeforces" {
-		// 获取rating
 		res := apiPost("https://codeforces.com/api/user.info", url.Values{"handles": {ojUser.Handle}})
 		if res["status"] == "OK" {
 			info := res["result"].([]interface{})[0].(map[string]interface{})
@@ -25,15 +17,11 @@ func UpdateOjUser(db storage.DB, ctx context.Context, ojUser *storage.OjUser) {
 			ojUser.MaxRating = int64(info["maxRating"].(float64))
 		}
 
-		// 更新用户的submission
+		// Update user's codeforces submissions.
 		UpdateCfSubmission(db, ctx, ojUser)
 
-		// 获取AcceptCount
 		ojUser.AcceptCount, _ = db.GetAcceptCount(ctx, ojUser.ID)
-
 		ojUser.Link = "https://codeforces.com/profile/" + ojUser.Handle
-
-		// 更新OjUser数据
 		db.UpdateOjUser(ctx, ojUser)
 	}
 }
@@ -46,10 +34,8 @@ func UpdateCfSubmission(db storage.DB, ctx context.Context, ojUser *storage.OjUs
 			info := _info.(map[string]interface{})
 			problemInfo := info["problem"].(map[string]interface{})
 			if problemInfo["contestId"] == nil {
-				// TODO: 特殊数据，先跳过
-				// problemsetName: acmsguru
-				// 链接形式和常规problemset中的不同，后续单独处理
-				// fmt.Println(problemInfo)
+				// NOTE: Currently only problems in official problemset are processed.
+				//       Gym and SGU problemset have not been stored in our db.
 				continue
 			}
 			contestId := problemInfo["contestId"].(float64)
@@ -66,8 +52,8 @@ func UpdateCfSubmission(db storage.DB, ctx context.Context, ojUser *storage.OjUs
 					problem.OjName = ojUser.OjName
 					problem.Name = problemInfo["name"].(string)
 					problem.Link = problemLink
-					if problemInfo["points"] != nil {
-						problem.Rating = int64(problemInfo["points"].(float64))
+					if problemInfo["rating"] != nil {
+						problem.Rating = int64(problemInfo["rating"].(float64))
 					}
 					if err := db.CreateProblem(ctx, &problem); err != nil {
 						panic(err)

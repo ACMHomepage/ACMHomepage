@@ -27,3 +27,8 @@ func (db DB) CreateProblem(ctx context.Context, problem *Problem) error {
 	_, err := db.NewInsert().Model(problem).Exec(ctx)
 	return err
 }
+
+func (db DB) GetProblemByRating(ctx context.Context, problems *[]Problem, rating_from int64, rating_to int64) error {
+	err := db.NewSelect().Model(problems).Where("rating >= ?", rating_from).Where("rating <= ?", rating_to).Scan(ctx)
+	return err
+}
